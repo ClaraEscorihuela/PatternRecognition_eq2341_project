@@ -2,3 +2,4 @@ jupyter~=1.0.0
 numpy~=1.20.2
 matplotlib~=3.4.1
 scipy~=1.6.3
+librosa~=0.8.0

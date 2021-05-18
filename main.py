@@ -1,64 +1,126 @@
-import math
+from collections import Counter
 from typing import List
 
+import librosa as librosa
 import numpy as np
-import matplotlib.pyplot as plt
-from collections import Counter
-import scipy.stats as stats
 
-from PattRecClasses import MarkovChain, GaussD, HMM, gauss_logprob
-import matplotlib.font_manager as font_manager
+from PattRecClasses import MarkovChain, HMM
+from PattRecClasses.HMM import multigaussD, logprob_2, logprob
+from PattRecClasses.features import get_features
 
-# # One-dimensional Gaussian
-# g1 = GaussD( means=np.array([0]) , stdevs=np.array([1.0]))
-# g2 = GaussD( means=np.array([3]) , stdevs=np.array([2.0]))
-# obs = np.array([-0.2, 2.6, 1.3])
-# prueba1 = gauss_logprob.gauss_logprob([g1], np.array([obs]))
-# prueba2 = gauss_logprob.gauss_logprob([g2], np.array([obs]))
+from matplotlib import pyplot as plt
+
+BITRATE = 22050
+N = 10
+M = 12
+# M = 49
+
+
+def trans_feature(fs: np.ndarray, f: List[int]) -> np.ndarray:
+    # 2: Silences
+    # 3: Real silences
+    # 6: Semitone difference
+    # 7: Unlimited semitone difference
+
+    fs_extracted = [[] for _ in range(len(fs))]
+    in_silence = False
+    tmp = [[0] for _ in range(len(fs))]
+    for i in range(len(fs[0])):
+        if not fs[3][i]:
+            if fs[2][i]:
+                if not in_silence:
+                    for fx in f:
+                        tmp[fx] = fs[fx][i]
+                    in_silence = True
+                else:
+                    for fx in f:
+                        tmp[fx] += fs[fx][i]
+            else:
+                if in_silence:
+                    in_silence = False
+                    for fx in f:
+                        fs_extracted[fx].append(tmp[fx] + fs[fx][i])
+                    tmp = [[0] for _ in range(len(fs))]
+                else:
+                    for fx in f:
+                        fs_extracted[fx].append(fs[fx][i])
+    fs_extracted = [f_ex for i, f_ex in enumerate(fs_extracted) if i in f]
+    fs_extracted_2 = [[] for _ in range(len(fs_extracted))]
+    for i in range(len(fs_extracted[0])):
+        for j in range(len(fs_extracted)):
+            if fs_extracted[0][i]:
+                fs_extracted_2[j].append(fs_extracted[j][i])
+    return np.array(fs_extracted_2)
+
+
 def main():
-    classes = {0: 0, 1: 0}
-    iters = 500
-    # rng = 100000
-    rng = 1
-    lengths = {i: 0 for i in range(iters + 2)}
-    xs = []
+    wav_colours = ["#1954a6", "#c9c8cd", "#da5195"]
+    # wav_files = ["test_5.ogg", "melody_2.wav", "melody_3.wav"][:1]
+    wav_files = {"A": ["melody_1.wav"], "B": ["melody_3.wav"]}
+    hmms = {}
+    wav_recordings = {song: [librosa.load(f"Songs/{recording}")[0] for recording in recordings] for song, recordings in wav_files.items()}
+    songs_features = {song: [get_features(signal=wav, fs=BITRATE) for wav in wavs] for song, wavs in wav_recordings.items()}
 
-    font_dirs = ['../fonts']
-    font_files = font_manager.findSystemFonts(fontpaths=font_dirs)
+    for song, song_features in songs_features.items():
+        if not song in hmms.keys():
+            qstar = np.array([0.8, 0.2])
+            Astar = np.array([[0.5, 0.5], [0.5, 0.5]])
+            meansstar = np.array([[0, 0], [0, 0]])
+            covsstar = np.array([[[1, 0], [0, 1]],
+                                 [[1, 0], [0, 1]]])
+            Bstar = np.array([multigaussD(meansstar[0], covsstar[0]),
+                      multigaussD(meansstar[1], covsstar[1])])
+            hmms[song] = HMM(qstar, Astar, Bstar)
 
-    for font_file in font_files:
-        font_manager.fontManager.addfont(font_file)
+        for features in song_features:
+            obs = np.array([trans_feature(fs=features, f=[6, 7]).T])
+            hmms[song].baum_welch(obs=obs, niter=100, prin=1, uselog=False)
 
-    plt.rcParams['font.family'] = "Helvetica"
+    # wav = librosa.load(f"Songs/melody_2.wav")[0]
+    # features = get_features(signal=wav, fs=BITRATE)
 
-    q = np.array([1.0, 0.0])
-    a = np.array([np.array([0.9, 0.1, 0.0]), np.array([0.0, 0.9, 0.1])])
-    obs = np.array([-0.2, 2.6, 1.3])
+    # count = sorted(list(Counter(features[6]).items()), key=lambda x: x[0])
+    # plt.plot([a for a, _ in count], [a for _, a in count])
+    # plt.show()
+    #
+    # count = sorted(list(Counter(features[7]).items()), key=lambda x: x[0])
+    # plt.plot([a for a, _ in count], [a for _, a in count])
+    # plt.show()
 
-    g1 = GaussD(means=[0.0], stdevs=[1.0])
-    g2 = GaussD(means=[3.0], stdevs=[2.0])
-    prob_obs = [g.prob(obs) for g in [g1, g2]]
-    mc = MarkovChain(initial_prob=q, transition_prob=a, dist_obs=prob_obs, obs=obs, scaling=True)
-    h = HMM(mc, [g1, g2])
-    a_ts, c_ts = mc.forward()
-    b_ts = mc.backward()
-    log_prob = h.logprob(c_ts)
-    print("A_hat =", a_ts, "C_ts =", c_ts, "B_hat =", b_ts)
-    print("LogProbability = ", log_prob)
+    # obs = trans_feature(fs=features, f=[6, 7]).T
+    # a_1, c_log_1 = logprob(x=obs, B=hmms["A"].B)
+    # a_2, c_log_2 = logprob(x=obs, B=hmms["B"].B)
+    # print("a")
 
-    q = np.array([1.0, 0.0, 0.0])
-    a = np.array([np.array([0.3, 0.7, 0.0]), np.array([0.0, 0.5, 0.5]), np.array([0.0, 0.0, 1.0])])
-    obs = np.array([1, 2, 4, 4, 1])
-    g3 = GaussD(means=[6.0], stdevs=[3.0])
-    prob_obs = [g.prob(obs) for g in [g1, g2, g3]]
+    wav = librosa.load(f"Songs/melody_1.wav")[0]
+    features = get_features(signal=wav, fs=BITRATE)
+    obs = trans_feature(fs=features, f=[6, 7]).T
+    _, _, cs_a = hmms["A"].calcabc(obs=obs)
+    _, _, cs_b = hmms["B"].calcabc(obs=obs)
+    print("Melody 1")
+    print(np.nanmean(np.sum(np.log([a for a in cs_a if not any([np.isnan(ax) for ax in a])]))))
+    print(np.nanmean(np.sum(np.log([b for b in cs_b if not any([np.isnan(bx) for bx in b])]))))
 
-    mc = MarkovChain(initial_prob=q, transition_prob=a, dist_obs=prob_obs, obs=obs, scaling=False)
-    h = HMM(mc, [g1, g2, g3])
-    a_ts, c_ts = mc.forward()
-    b_ts = mc.backward()
-    log_prob = h.logprob(c_ts)
-    print("A_hat =", a_ts, "C_ts =", c_ts, "B_hat =", b_ts)
-    print("LogProbability = ", log_prob)
+    wav = librosa.load(f"Songs/melody_2.wav")[0]
+    features = get_features(signal=wav, fs=BITRATE)
+    obs = trans_feature(fs=features, f=[6, 7]).T
+    _, _, cs_a = hmms["A"].calcabc(obs=obs)
+    _, _, cs_b = hmms["B"].calcabc(obs=obs)
+    print("Melody 2")
+    print(np.nanmean(np.sum(np.log([a for a in cs_a if not any([np.isnan(ax) for ax in a])]))))
+    print(np.nanmean(np.sum(np.log([b for b in cs_b if not any([np.isnan(bx) for bx in b])]))))
+
+    wav = librosa.load(f"Songs/melody_3.wav")[0]
+    features = get_features(signal=wav, fs=BITRATE)
+    obs = trans_feature(fs=features, f=[6, 7]).T
+    _, _, cs_a = hmms["A"].calcabc(obs=obs)
+    _, _, cs_b = hmms["B"].calcabc(obs=obs)
+    print("Melody 3")
+    print(np.nanmean(np.sum(np.log([a for a in cs_a if not any([np.isnan(ax) for ax in a])]))))
+    print(np.nanmean(np.sum(np.log([b for b in cs_b if not any([np.isnan(bx) for bx in b])]))))
+
+
+    print("a")
 
 
 if __name__ == "__main__":
