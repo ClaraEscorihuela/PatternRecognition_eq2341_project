@@ -1,5 +1,6 @@
 from collections import Counter
 from typing import List
+import pickle
 
 import librosa as librosa
 import numpy as np
@@ -58,88 +59,99 @@ def trans_feature(fs: np.ndarray, f: List[int]) -> np.ndarray:
 def main():
     wav_colours = ["#1954a6", "#c9c8cd", "#da5195"]
 
-    song_class = ['A','B']
-    wav_files = {}
     # wav_files = ["test_5.ogg", "melody_2.wav", "melody_3.wav"][:1]
     # wav_files = {"A": ["CSD_ER_alto_1.wav"]}
-    for letter in song_class:
-        wav_files_element =[f for f in listdir(f"SongTrial{letter}/") if isfile(join(f"SongTrial{letter}/", f))]
-        wav_files[f"{letter}"] = wav_files_element
 
-    hmms = {}
-    wav_recordings = {song: [librosa.load(f"Songs/{recording}")[0] for recording in recordings] for song, recordings in wav_files.items()}
-    songs_features = {song: [get_features(signal=wav, fs=BITRATE) for wav in wavs] for song, wavs in wav_recordings.items()}
+    try:
+        with open("data_wavs.pickle", "rb") as handle:
+            wav_recordings = pickle.load(handle)
+        print("Read presaved wav data...")
+    except FileNotFoundError:
+        print("Reading new wav data...")
+        wav_files = {}
+        for letter in listdir("Songs"):
+            if not isfile(f"Songs/{letter}"):
+                wav_files[letter] = {"Train": [], "Test": []}
 
-    wav_records = open('wav_records.txt', 'wt')
-    wav_records.write(str(wav_recordings))
-    wav_records.close()
+        for letter in wav_files.keys():
+            for f in listdir(f"Songs/{letter}/"):
+                if isfile(join(f"Songs/{letter}/", f)):
+                    if f.endswith("_t.wav"):
+                        wav_files[letter]["Test"].append(f)
+                    else:
+                        wav_files[letter]["Train"].append(f)
 
-    songs_feat = open('songs_features.txt', 'wt')
-    songs_feat.write(str(songs_features))
-    songs_feat.close()
+        wav_recordings = {
+            song: {
+                cat: [
+                    librosa.load(f"Songs/{song}/{recording}")[0] for recording in recordings
+                ]
+                for cat, recordings in cats.items()
+            }
+            for song, cats in wav_files.items()
+        }
 
+        with open("data_wavs.pickle", "wb") as handle:
+            pickle.dump(wav_recordings, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-    for song, song_features in songs_features.items():
-        if not song in hmms.keys():
-            qstar = np.array([0.8, 0.2])
-            Astar = np.array([[0.5, 0.5], [0.5, 0.5]])
-            meansstar = np.array([[0, 0], [0, 0]])
-            covsstar = np.array([[[1, 0], [0, 1]],
-                                 [[1, 0], [0, 1]]])
-            Bstar = np.array([multigaussD(meansstar[0], covsstar[0]),
-                      multigaussD(meansstar[1], covsstar[1])])
-            hmms[song] = HMM(qstar, Astar, Bstar)
+    try:
+        with open("data_features.pickle", "rb") as handle:
+            songs_features = pickle.load(handle)
+        print("Read presaved feature data...")
+    except FileNotFoundError:
+        print("Reading new feature data...")
+        songs_features = {
+            song: {
+                cat: [get_features(signal=wav, fs=BITRATE) for wav in wavs]
+                for cat, wavs in cats.items()
+            }
+            for song, cats in wav_recordings.items()
+        }
 
-        for features in song_features:
-            obs = np.array([trans_feature(fs=features, f=[6, 7]).T])
-            hmms[song].baum_welch(obs=obs, niter=100, prin=1, uselog=False)
+        with open("data_features.pickle", "wb") as handle:
+            pickle.dump(songs_features, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-    # wav = librosa.load(f"Songs/melody_2.wav")[0]
-    # features = get_features(signal=wav, fs=BITRATE)
+    try:
+        with open("data_hmms.pickle", "rb") as handle:
+            hmms = pickle.load(handle)
+        print("Read pretrained HMM data...")
+    except FileNotFoundError:
+        print("Training new HMM data...")
+        hmms = {}
+        for song, cats in songs_features.items():
+            for i, song_features in enumerate(cats["Train"]):
+                if song not in hmms.keys():
+                    print(f"Initializing song {song} HMM...")
+                    qstar = np.array([0.8, 0.2])
+                    Astar = np.array([[0.5, 0.5], [0.5, 0.5]])
+                    meansstar = np.array([[0, 0], [0, 0]])
+                    covsstar = np.array([[[1, 0], [0, 1]], [[1, 0], [0, 1]]])
+                    Bstar = np.array(
+                        [
+                            multigaussD(meansstar[0], covsstar[0]),
+                            multigaussD(meansstar[1], covsstar[1]),
+                        ]
+                    )
+                    hmms[song] = HMM(qstar, Astar, Bstar)
 
-    # count = sorted(list(Counter(features[6]).items()), key=lambda x: x[0])
-    # plt.plot([a for a, _ in count], [a for _, a in count])
-    # plt.show()
-    #
-    # count = sorted(list(Counter(features[7]).items()), key=lambda x: x[0])
-    # plt.plot([a for a, _ in count], [a for _, a in count])
-    # plt.show()
+                print(f"\tTraining sample {i}...")
+                obs = np.array([trans_feature(fs=song_features, f=[6, 7]).T])
+                hmms[song].baum_welch(obs=obs, niter=100, uselog=True)
 
-    # obs = trans_feature(fs=features, f=[6, 7]).T
-    # a_1, c_log_1 = logprob(x=obs, B=hmms["A"].B)
-    # a_2, c_log_2 = logprob(x=obs, B=hmms["B"].B)
-    # print("a")
+        with open("data_hmms.pickle", "wb") as handle:
+            pickle.dump(hmms, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-
-    wav = librosa.load(f"SongsPattern/CSD_ER_alto_1.wav")[0]
-    features = get_features(signal=wav, fs=BITRATE)
-    obs = trans_feature(fs=features, f=[6, 7]).T
-    _, _, cs_a = hmms["A"].calcabc(obs=obs)
-    _, _, cs_b = hmms["B"].calcabc(obs=obs)
-    print("Melody 1")
-    print(np.nanmean(np.sum(np.log([a for a in cs_a if not any([np.isnan(ax) for ax in a])]))))
-    print(np.nanmean(np.sum(np.log([b for b in cs_b if not any([np.isnan(bx) for bx in b])]))))
-
-    wav = librosa.load(f"SongsPattern/CSD_ER_alto_2.wav")[0]
-    features = get_features(signal=wav, fs=BITRATE)
-    obs = trans_feature(fs=features, f=[6, 7]).T
-    _, _, cs_a = hmms["A"].calcabc(obs=obs)
-    _, _, cs_b = hmms["B"].calcabc(obs=obs)
-    print("Melody 2")
-    print(np.nanmean(np.sum(np.log([a for a in cs_a if not any([np.isnan(ax) for ax in a])]))))
-    print(np.nanmean(np.sum(np.log([b for b in cs_b if not any([np.isnan(bx) for bx in b])]))))
-
-    wav = librosa.load(f"SongsPattern/CSD_LI_alto_1.wav")[0]
-    features = get_features(signal=wav, fs=BITRATE)
-    obs = trans_feature(fs=features, f=[6, 7]).T
-    _, _, cs_a = hmms["A"].calcabc(obs=obs)
-    _, _, cs_b = hmms["B"].calcabc(obs=obs)
-    print("Melody 3")
-    print(np.nanmean(np.sum(np.log([a for a in cs_a if not any([np.isnan(ax) for ax in a])]))))
-    print(np.nanmean(np.sum(np.log([b for b in cs_b if not any([np.isnan(bx) for bx in b])]))))
-
-
-    print("a")
+    for song, cats in songs_features.items():
+        print(f"Testing song {song}...")
+        for i, song_features in enumerate(cats["Test"]):
+            print(f"\tTesting sample {i}...")
+            obs = trans_feature(fs=song_features, f=[6, 7]).T
+            cs_hmms = {letter: hmm.calcabc(obs=obs)[2] for letter, hmm in hmms.items()}
+            for letter, cs in cs_hmms.items():
+                cs_mean = np.nanmean(
+                    np.sum(np.log([a for a in cs if not any([np.isnan(ax) for ax in a])]))
+                )
+                print(f"\t\t{letter}: {cs_mean}")
 
 
 if __name__ == "__main__":
