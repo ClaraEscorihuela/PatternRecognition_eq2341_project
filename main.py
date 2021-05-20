@@ -3,6 +3,8 @@ from typing import List
 
 import librosa as librosa
 import numpy as np
+from os import listdir
+from os.path import isfile, join
 
 from PattRecClasses import MarkovChain, HMM
 from PattRecClasses.HMM import multigaussD, logprob_2, logprob
@@ -55,11 +57,27 @@ def trans_feature(fs: np.ndarray, f: List[int]) -> np.ndarray:
 
 def main():
     wav_colours = ["#1954a6", "#c9c8cd", "#da5195"]
+
+    song_class = ['A','B']
+    wav_files = {}
     # wav_files = ["test_5.ogg", "melody_2.wav", "melody_3.wav"][:1]
-    wav_files = {"A": ["melody_1.wav"], "B": ["melody_3.wav"]}
+    # wav_files = {"A": ["CSD_ER_alto_1.wav"]}
+    for letter in song_class:
+        wav_files_element =[f for f in listdir(f"SongTrial{letter}/") if isfile(join(f"SongTrial{letter}/", f))]
+        wav_files[f"{letter}"] = wav_files_element
+
     hmms = {}
     wav_recordings = {song: [librosa.load(f"Songs/{recording}")[0] for recording in recordings] for song, recordings in wav_files.items()}
     songs_features = {song: [get_features(signal=wav, fs=BITRATE) for wav in wavs] for song, wavs in wav_recordings.items()}
+
+    wav_records = open('wav_records.txt', 'wt')
+    wav_records.write(str(wav_recordings))
+    wav_records.close()
+
+    songs_feat = open('songs_features.txt', 'wt')
+    songs_feat.write(str(songs_features))
+    songs_feat.close()
+
 
     for song, song_features in songs_features.items():
         if not song in hmms.keys():
@@ -92,7 +110,8 @@ def main():
     # a_2, c_log_2 = logprob(x=obs, B=hmms["B"].B)
     # print("a")
 
-    wav = librosa.load(f"Songs/melody_1.wav")[0]
+
+    wav = librosa.load(f"SongsPattern/CSD_ER_alto_1.wav")[0]
     features = get_features(signal=wav, fs=BITRATE)
     obs = trans_feature(fs=features, f=[6, 7]).T
     _, _, cs_a = hmms["A"].calcabc(obs=obs)
@@ -101,7 +120,7 @@ def main():
     print(np.nanmean(np.sum(np.log([a for a in cs_a if not any([np.isnan(ax) for ax in a])]))))
     print(np.nanmean(np.sum(np.log([b for b in cs_b if not any([np.isnan(bx) for bx in b])]))))
 
-    wav = librosa.load(f"Songs/melody_2.wav")[0]
+    wav = librosa.load(f"SongsPattern/CSD_ER_alto_2.wav")[0]
     features = get_features(signal=wav, fs=BITRATE)
     obs = trans_feature(fs=features, f=[6, 7]).T
     _, _, cs_a = hmms["A"].calcabc(obs=obs)
@@ -110,7 +129,7 @@ def main():
     print(np.nanmean(np.sum(np.log([a for a in cs_a if not any([np.isnan(ax) for ax in a])]))))
     print(np.nanmean(np.sum(np.log([b for b in cs_b if not any([np.isnan(bx) for bx in b])]))))
 
-    wav = librosa.load(f"Songs/melody_3.wav")[0]
+    wav = librosa.load(f"SongsPattern/CSD_LI_alto_1.wav")[0]
     features = get_features(signal=wav, fs=BITRATE)
     obs = trans_feature(fs=features, f=[6, 7]).T
     _, _, cs_a = hmms["A"].calcabc(obs=obs)
