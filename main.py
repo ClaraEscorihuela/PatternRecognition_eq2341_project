@@ -7,7 +7,7 @@ import numpy as np
 from os import listdir
 from os.path import isfile, join
 
-from PattRecClasses import MarkovChain, HMM, DataAnalysis
+from PattRecClasses import MarkovChain, HMM
 from PattRecClasses.HMM import multigaussD, logprob_2, logprob
 from PattRecClasses.features import get_features
 
@@ -16,8 +16,6 @@ from matplotlib import pyplot as plt
 BITRATE = 22050
 N = 10
 M = 12
-
-
 # M = 49
 
 
@@ -54,7 +52,6 @@ def trans_feature(fs: np.ndarray, f: List[int]) -> np.ndarray:
     for i in range(len(fs_extracted[0])):
         for j in range(len(fs_extracted)):
             if fs_extracted[0][i]:
-                print(fs_extracted[0][i])
                 fs_extracted_2[j].append(fs_extracted[j][i])
     return np.array(fs_extracted_2)
 
@@ -81,7 +78,7 @@ def main():
                 if isfile(join(f"Songs/{letter}/", f)):
                     if f.endswith("_t.wav"):
                         wav_files[letter]["Test"].append(f)
-                    elif not f.endswith("_r.wav"):
+                    else:
                         wav_files[letter]["Train"].append(f)
 
         wav_recordings = {
@@ -114,9 +111,6 @@ def main():
         with open("data_features.pickle", "wb") as handle:
             pickle.dump(songs_features, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-    figure = DataAnalysis.data_analysis(songs_features, features=[6, 1])
-    figure.show()
-
     try:
         with open("data_hmms.pickle", "rb") as handle:
             hmms = pickle.load(handle)
@@ -141,7 +135,7 @@ def main():
                     hmms[song] = HMM(qstar, Astar, Bstar)
 
                 print(f"\tTraining sample {i}...")
-                obs = np.array([trans_feature(fs=song_features, f=[6, 1]).T])
+                obs = np.array([trans_feature(fs=song_features, f=[6, 7]).T])
                 hmms[song].baum_welch(obs=obs, niter=100, uselog=True)
 
         with open("data_hmms.pickle", "wb") as handle:
@@ -151,7 +145,7 @@ def main():
         print(f"Testing song {song}...")
         for i, song_features in enumerate(cats["Test"]):
             print(f"\tTesting sample {i}...")
-            obs = trans_feature(fs=song_features, f=[6, 1]).T
+            obs = trans_feature(fs=song_features, f=[6, 7]).T
             cs_hmms = {letter: hmm.calcabc(obs=obs)[2] for letter, hmm in hmms.items()}
             for letter, cs in cs_hmms.items():
                 cs_mean = np.nanmean(
