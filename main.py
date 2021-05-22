@@ -31,30 +31,32 @@ def trans_feature(fs: np.ndarray, f: List[int]) -> np.ndarray:
     in_silence = False
     tmp = [[0] for _ in range(len(fs))]
     for i in range(len(fs[0])):
-        if not fs[3][i]:
-            if fs[2][i]:
-                if not in_silence:
-                    for fx in f:
-                        tmp[fx] = fs[fx][i]
-                    in_silence = True
-                else:
-                    for fx in f:
-                        tmp[fx] += fs[fx][i]
-            else:
-                if in_silence:
-                    in_silence = False
-                    for fx in f:
-                        fs_extracted[fx].append(tmp[fx] + fs[fx][i])
-                    tmp = [[0] for _ in range(len(fs))]
-                else:
-                    for fx in f:
-                        fs_extracted[fx].append(fs[fx][i])
+        for fx in f:
+            fs_extracted[fx].append(fs[fx][i])
+        # if not fs[3][i]:
+        #     if fs[2][i]:
+        #         if not in_silence:
+        #             for fx in f:
+        #                 tmp[fx] = fs[fx][i]
+        #             in_silence = True
+        #         else:
+        #             for fx in f:
+        #                 tmp[fx] += fs[fx][i]
+        #     else:
+        #         if in_silence:
+        #             in_silence = False
+        #             for fx in f:
+        #                 fs_extracted[fx].append(tmp[fx] + fs[fx][i])
+        #             tmp = [[0] for _ in range(len(fs))]
+        #         else:
+        #             for fx in f:
+        #                 fs_extracted[fx].append(fs[fx][i])
     fs_extracted = [f_ex for i, f_ex in enumerate(fs_extracted) if i in f]
     fs_extracted_2 = [[] for _ in range(len(fs_extracted))]
     for i in range(len(fs_extracted[0])):
         for j in range(len(fs_extracted)):
-            # if fs_extracted[0][i]:
-            fs_extracted_2[j].append(fs_extracted[j][i])
+            if fs_extracted[0][i]:
+                fs_extracted_2[j].append(fs_extracted[j][i])
     return np.array(fs_extracted_2)
 
 

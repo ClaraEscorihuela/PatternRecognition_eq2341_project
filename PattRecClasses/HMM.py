@@ -254,7 +254,7 @@ class HMM:
                     np.log([a for a in cs if not any([np.isnan(ax) for ax in a])])
                 )
             )
-            if abs(old_log - new_log) < 0.000001:
+            if abs(old_log - new_log) < 0.0000001:
                 print(f"\t\tTraining took {it} iterations")
                 break
             old_log = new_log
