@@ -1,3 +1,4 @@
+import random
 from collections import Counter
 from typing import List
 import pickle
@@ -14,10 +15,10 @@ from PattRecClasses.features import get_features
 from matplotlib import pyplot as plt
 
 BITRATE = 22050
-N = 10
+N = 2
 M = 12
 # M = 49
-FEATURES = [6, 7]
+FEATURES = [0, 6]
 
 
 def trans_feature(fs: np.ndarray, f: List[int]) -> np.ndarray:
@@ -57,6 +58,11 @@ def trans_feature(fs: np.ndarray, f: List[int]) -> np.ndarray:
     return np.array(fs_extracted_2)
 
 
+def normalize(xs: List[float]) -> List[float]:
+    xs_sum = sum(xs)
+    return [x / xs_sum for x in xs]
+
+
 def main():
     wav_colours = ["#1954a6", "#c9c8cd", "#da5195"]
 
@@ -77,15 +83,20 @@ def main():
         for letter in wav_files.keys():
             for f in listdir(f"Songs/{letter}/"):
                 if isfile(join(f"Songs/{letter}/", f)):
-                    if f.endswith("_t.wav"):
+                    if f.endswith("_t.wav") and not f.endswith("_c_t.wav"):
                         wav_files[letter]["Test"].append(f)
-                    elif not f.endswith("_r.wav"):
+                    elif (
+                        not f.endswith("_r.wav")
+                        and not f.endswith("_c.wav")
+                        and not f.endswith("_c_r.wav")
+                    ):
                         wav_files[letter]["Train"].append(f)
 
         wav_recordings = {
             song: {
                 cat: [
-                    librosa.load(f"Songs/{song}/{recording}")[0] for recording in recordings
+                    librosa.load(f"Songs/{song}/{recording}")[0]
+                    for recording in recordings
                 ]
                 for cat, recordings in cats.items()
             }
@@ -120,24 +131,35 @@ def main():
         print("Training new HMM data")
         hmms = {}
         for song, cats in songs_features.items():
-            for i, song_features in enumerate(cats["Train"]):
-                if song not in hmms.keys():
-                    print(f"Initializing song {song} HMM")
-                    qstar = np.array([0.8, 0.2])
-                    Astar = np.array([[0.5, 0.5], [0.5, 0.5]])
-                    meansstar = np.array([[0, 0], [0, 0]])
-                    covsstar = np.array([[[1, 0], [0, 1]], [[1, 0], [0, 1]]])
-                    Bstar = np.array(
-                        [
-                            multigaussD(meansstar[0], covsstar[0]),
-                            multigaussD(meansstar[1], covsstar[1]),
-                        ]
+            print(f"Initializing song {song} HMM")
+            qstar = np.array(
+                normalize([1 / N + random.uniform(-0.05, 0.05) for _ in range(N)])
+            )
+            Astar = np.array(
+                [
+                    np.array(
+                        normalize(
+                            [1 / N + random.uniform(-0.05, 0.05) for _ in range(N)]
+                        )
                     )
-                    hmms[song] = HMM(qstar, Astar, Bstar)
+                    for _ in range(N)
+                ]
+            )
+            meansstar = np.array([[0, 0], [0, 0]])
+            covsstar = np.array([[[1, 0], [0, 1]], [[1, 0], [0, 1]]])
+            Bstar = np.array(
+                [
+                    multigaussD(meansstar[0], covsstar[0]),
+                    multigaussD(meansstar[1], covsstar[1]),
+                ]
+            )
+            hmms[song] = HMM(qstar, Astar, Bstar)
 
-                print(f"\tTraining sample {i}")
-                obs = np.array([trans_feature(fs=song_features, f=FEATURES).T])
-                hmms[song].baum_welch(obs=obs, niter=100, uselog=True)
+            fs = np.concatenate(cats["Train"], axis=1)
+
+            print(f"\tTraining {len(cats['Train'])} samples")
+            obs = np.array([trans_feature(fs=fs, f=FEATURES).T])
+            hmms[song].baum_welch(obs=obs, niter=100, uselog=True)
 
         with open("data_hmms.pickle", "wb") as handle:
             pickle.dump(hmms, handle, protocol=pickle.HIGHEST_PROTOCOL)
@@ -150,7 +172,9 @@ def main():
             cs_hmms = {letter: hmm.calcabc(obs=obs)[2] for letter, hmm in hmms.items()}
             for letter, cs in cs_hmms.items():
                 cs_mean = np.nanmean(
-                    np.sum(np.log([a for a in cs if not any([np.isnan(ax) for ax in a])]))
+                    np.sum(
+                        np.log([a for a in cs if not any([np.isnan(ax) for ax in a])])
+                    )
                 )
                 print(f"\t\t{letter}: {cs_mean}")
 
