@@ -17,6 +17,7 @@ BITRATE = 22050
 N = 10
 M = 12
 # M = 49
+FEATURES = [6, 7]
 
 
 def trans_feature(fs: np.ndarray, f: List[int]) -> np.ndarray:
@@ -51,8 +52,8 @@ def trans_feature(fs: np.ndarray, f: List[int]) -> np.ndarray:
     fs_extracted_2 = [[] for _ in range(len(fs_extracted))]
     for i in range(len(fs_extracted[0])):
         for j in range(len(fs_extracted)):
-            if fs_extracted[0][i]:
-                fs_extracted_2[j].append(fs_extracted[j][i])
+            # if fs_extracted[0][i]:
+            fs_extracted_2[j].append(fs_extracted[j][i])
     return np.array(fs_extracted_2)
 
 
@@ -65,9 +66,9 @@ def main():
     try:
         with open("data_wavs.pickle", "rb") as handle:
             wav_recordings = pickle.load(handle)
-        print("Read presaved wav data...")
+        print("Read presaved wav data")
     except FileNotFoundError:
-        print("Reading new wav data...")
+        print("Reading new wav data")
         wav_files = {}
         for letter in listdir("Songs"):
             if not isfile(f"Songs/{letter}"):
@@ -78,7 +79,7 @@ def main():
                 if isfile(join(f"Songs/{letter}/", f)):
                     if f.endswith("_t.wav"):
                         wav_files[letter]["Test"].append(f)
-                    else:
+                    elif not f.endswith("_r.wav"):
                         wav_files[letter]["Train"].append(f)
 
         wav_recordings = {
@@ -97,9 +98,9 @@ def main():
     try:
         with open("data_features.pickle", "rb") as handle:
             songs_features = pickle.load(handle)
-        print("Read presaved feature data...")
+        print("Read presaved feature data")
     except FileNotFoundError:
-        print("Reading new feature data...")
+        print("Reading new feature data")
         songs_features = {
             song: {
                 cat: [get_features(signal=wav, fs=BITRATE) for wav in wavs]
@@ -114,14 +115,14 @@ def main():
     try:
         with open("data_hmms.pickle", "rb") as handle:
             hmms = pickle.load(handle)
-        print("Read pretrained HMM data...")
+        print("Read pretrained HMM data")
     except FileNotFoundError:
-        print("Training new HMM data...")
+        print("Training new HMM data")
         hmms = {}
         for song, cats in songs_features.items():
             for i, song_features in enumerate(cats["Train"]):
                 if song not in hmms.keys():
-                    print(f"Initializing song {song} HMM...")
+                    print(f"Initializing song {song} HMM")
                     qstar = np.array([0.8, 0.2])
                     Astar = np.array([[0.5, 0.5], [0.5, 0.5]])
                     meansstar = np.array([[0, 0], [0, 0]])
@@ -134,24 +135,26 @@ def main():
                     )
                     hmms[song] = HMM(qstar, Astar, Bstar)
 
-                print(f"\tTraining sample {i}...")
-                obs = np.array([trans_feature(fs=song_features, f=[6, 7]).T])
+                print(f"\tTraining sample {i}")
+                obs = np.array([trans_feature(fs=song_features, f=FEATURES).T])
                 hmms[song].baum_welch(obs=obs, niter=100, uselog=True)
 
         with open("data_hmms.pickle", "wb") as handle:
             pickle.dump(hmms, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     for song, cats in songs_features.items():
-        print(f"Testing song {song}...")
+        print(f"Testing song {song}")
         for i, song_features in enumerate(cats["Test"]):
-            print(f"\tTesting sample {i}...")
-            obs = trans_feature(fs=song_features, f=[6, 7]).T
+            print(f"\tTesting sample {i}")
+            obs = trans_feature(fs=song_features, f=FEATURES).T
             cs_hmms = {letter: hmm.calcabc(obs=obs)[2] for letter, hmm in hmms.items()}
             for letter, cs in cs_hmms.items():
                 cs_mean = np.nanmean(
                     np.sum(np.log([a for a in cs if not any([np.isnan(ax) for ax in a])]))
                 )
                 print(f"\t\t{letter}: {cs_mean}")
+
+    print("a")
 
 
 if __name__ == "__main__":
