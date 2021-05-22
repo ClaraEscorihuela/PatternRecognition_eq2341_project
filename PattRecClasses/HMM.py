@@ -245,8 +245,20 @@ class HMM:
         A = self.A
         B = self.B
 
+        old_log = float("inf")
         for it in range(niter):
             alphahats, betahats, cs = self.calcabc(obs)  # from Assignment 3 and 4
+
+            new_log = np.nanmean(
+                np.sum(
+                    np.log([a for a in cs if not any([np.isnan(ax) for ax in a])])
+                )
+            )
+            if abs(old_log - new_log) < 0.000001:
+                print(f"\t\tTraining took {it} iterations")
+                break
+            old_log = new_log
+
             gammas = self.calcgammas(
                 alphahats, betahats, cs, obs, uselog
             )  # alpha*beta*c

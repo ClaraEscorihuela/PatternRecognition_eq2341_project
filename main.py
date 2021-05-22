@@ -18,7 +18,7 @@ BITRATE = 22050
 N = 2
 M = 12
 # M = 49
-FEATURES = [0, 6]
+FEATURES = [0, 1]
 
 
 def trans_feature(fs: np.ndarray, f: List[int]) -> np.ndarray:
