@@ -14,7 +14,7 @@ def data_analysis(songs_features, features):
     }
 
     cols = ['Song {}'.format(col) for col in ['A']]
-    rows = ['Sample {}'.format(row) for row in range(1,7)]
+    rows = ['Sample {}'.format(row) for row in range(1,2)]
 
 
     fig, axes = plt.subplots(nrows=6, ncols=3)
@@ -32,7 +32,7 @@ def data_analysis(songs_features, features):
         print(f"Testing song {song}...")
 
         #fig, ax = plt.subplots(len(cats["Train"]))
-        for i, song_features in enumerate(cats["Train"][:6]):
+        for i, song_features in enumerate(cats["Train"][:2]):
             time = np.array(range(0, len(song_features[0])))
             sc = axes[i][letter].scatter(time, song_features[0], c=song_features[1])
 

@@ -15,10 +15,18 @@ from PattRecClasses.features import get_features
 from matplotlib import pyplot as plt
 
 BITRATE = 22050
-N = 2
+N = 5
 M = 12
 # M = 49
-FEATURES = [0, 1]
+FEATURES = [6]
+
+
+def trans_one_feature(fs: np.ndarray, f: int) -> np.array:
+    fs_extracted = []
+    for f in fs[f]:
+        if not fs_extracted or fs_extracted[-1] != f and f:
+            fs_extracted.append(f)
+    return np.array(2 * fs_extracted)
 
 
 def trans_feature(fs: np.ndarray, f: List[int]) -> np.ndarray:
@@ -137,34 +145,39 @@ def main():
         hmms = {}
         for song, cats in songs_features.items():
             print(f"Initializing song {song} HMM")
+            fs = np.concatenate(cats["Train"], axis=1)
+            init_obs = trans_one_feature(fs=fs, f=FEATURES[0])
+            count = [c2 for c2,_ in sorted(Counter(init_obs).items(), key=lambda c: c[1])][:5]
+            N = len(count)
+
             qstar = np.array(
-                normalize([1 / N + random.uniform(-0.05, 0.05) for _ in range(N)])
+                normalize([1 / N + random.uniform(-0.2, 0.2) for _ in range(N)])
             )
             Astar = np.array(
                 [
                     np.array(
                         normalize(
-                            [1 / N + random.uniform(-0.05, 0.05) for _ in range(N)]
+                            [1 / N + random.uniform(-0.1, 0.1) for _ in range(N)]
                         )
                     )
                     for _ in range(N)
                 ]
             )
-            meansstar = np.array([[0, 0], [0, 0]])
-            covsstar = np.array([[[1, 0], [0, 1]], [[1, 0], [0, 1]]])
+
+            meansstar = np.array([[c] for c in count])
+            covsstar = np.array([[[1]], [[1]], [[1]], [[1]], [[1]]])
             Bstar = np.array(
                 [
-                    multigaussD(meansstar[0], covsstar[0]),
-                    multigaussD(meansstar[1], covsstar[1]),
+                    multigaussD(meansstar[i], covsstar[i])
+                    for i in range(N)
                 ]
             )
             hmms[song] = HMM(qstar, Astar, Bstar)
 
-            fs = np.concatenate(cats["Train"], axis=1)
 
             print(f"\tTraining {len(cats['Train'])} samples")
-            obs = np.array([trans_feature(fs=fs, f=FEATURES).T])
-            hmms[song].baum_welch(obs=obs, niter=50, uselog=True)
+            obs = np.array([np.array([init_obs]).T])
+            hmms[song].baum_welch(obs=obs, niter=20, uselog=True)
 
         with open("data_hmms.pickle", "wb") as handle:
             pickle.dump(hmms, handle, protocol=pickle.HIGHEST_PROTOCOL)
@@ -173,7 +186,7 @@ def main():
         print(f"Testing song {song}")
         for i, song_features in enumerate(cats["Test"]):
             print(f"\tTesting sample {i}")
-            obs = trans_feature(fs=song_features, f=FEATURES).T
+            obs = np.array([trans_one_feature(fs=song_features, f=FEATURES[0])]).T
             cs_hmms = {letter: hmm.calcabc(obs=obs)[2] for letter, hmm in hmms.items()}
             for letter, cs in cs_hmms.items():
                 cs_mean = np.nanmean(
@@ -182,6 +195,9 @@ def main():
                     )
                 )
                 print(f"\t\t{letter}: {cs_mean}")
+            vit_hmms = {letter: hmm.viterbi(obs=obs) for letter, hmm in hmms.items()}
+            for letter, vit in vit_hmms.items():
+                print(f"\t\t{letter}: {vit}")
 
     print("a")
 
