@@ -1,7 +1,5 @@
 from typing import Optional
-
 import numpy as np
-
 from PattRecClasses.GetMusicFeatures import GetMusicFeatures
 
 N_SEMITONES = 12
