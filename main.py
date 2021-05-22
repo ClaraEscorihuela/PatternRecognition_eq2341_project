@@ -8,7 +8,7 @@ import numpy as np
 from os import listdir
 from os.path import isfile, join
 
-from PattRecClasses import MarkovChain, HMM
+from PattRecClasses import MarkovChain, HMM, DataAnalysis
 from PattRecClasses.HMM import multigaussD, logprob_2, logprob
 from PattRecClasses.features import get_features
 
@@ -18,7 +18,7 @@ BITRATE = 22050
 N = 2
 M = 12
 # M = 49
-FEATURES = [0, 1]
+FEATURES = [0, 6]
 
 
 def trans_feature(fs: np.ndarray, f: List[int]) -> np.ndarray:
@@ -125,6 +125,9 @@ def main():
         with open("data_features.pickle", "wb") as handle:
             pickle.dump(songs_features, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
+    #figure = DataAnalysis.data_analysis(songs_features, features=[6, 7])
+    #figure.show()
+
     try:
         with open("data_hmms.pickle", "rb") as handle:
             hmms = pickle.load(handle)
@@ -181,6 +184,8 @@ def main():
                 print(f"\t\t{letter}: {cs_mean}")
 
     print("a")
+
+
 
 
 if __name__ == "__main__":
