@@ -1,5 +1,5 @@
 import matplotlib.pyplot as plt
-from main import trans_feature
+from PattRecClasses.main import trans_feature
 import numpy as np
 
 def data_analysis(songs_features, features):
